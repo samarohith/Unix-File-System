@@ -1,367 +1,663 @@
-#include<bits/stdc++.h>
-#include<stdio.h>
+
+// Including required libraries.
+#include<iostream>
+#include<unordered_map>
+#include<vector>
+#include<stdlib.h>
+#include<sstream>
+#include<fstream>
+#include<cstring>
+#include<stack>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include<unistd.h>
 using namespace std;
 
-#define BLOCKS_COUNT 128
-#define FILES_COUNT 16
-
-char fsName[10] = "skr";
-
-struct inode{
-	char name[8];
-	int size;
-	int blockPointers[8];
-	int used=0;
+//structure of Inode
+struct Inode{
+	int Id;
+	string filename;
+	vector<string> childfilenames;
+	vector<struct Inode> indirect;
 };
 
-int currInodeToBytes(int num){
-   return 128+((num-1)*48);
-}
 
-int checkNumberOfFiles(){
-  FILE* fp = fopen(fsName,"r+");
-  char availStatus[128];
-  fread(availStatus,128,1,fp); // first 128 BYTES is assigned for checking block's status
-  int count = 0;
-  inode curr;
-  for(int i=0;i<FILES_COUNT;i++){
-  	fread(&curr,sizeof(inode),1,fp);
-  	if(curr.used == 1){
-  		count++;
-  	}
-  }
-  fclose(fp);
-  return count;
-}
+//structure of Directory
+struct Directory{
+	string name;
+	unordered_map<string,struct Inode> files;
+	unordered_map<string,struct Directory *> directories;
+};
 
-void create(char filename[8],int filesize)
+struct Directory *global;
+stack<struct Directory*> globalStack;
+//checks if InodeId is unique or not
+unordered_map<int,int> InodeId;
+
+//checks if InodeChildNames is unique or not
+unordered_map<string,int> InodeChildNames;
+
+
+//Will initialise disk block pointers and push all available block pointers into map.
+//here we are assuming 1MB space.
+//unordered_map<string,int> InodeChildNames;
+void initialiseDiskBlockPointers()
 {
-	
-   FILE* fp = fopen(fsName,"r+");
-   char availStatus[128];
-   fseek(fp,0,SEEK_SET);
-   fread(availStatus,BLOCKS_COUNT,1,fp); // first 128 BYTES is assigned for checking block's status
-   cout<<endl;
-   inode fileinode[16];
-   int currInode = 0;
-   for(currInode=1;currInode<FILES_COUNT;currInode++){
-   	  fread(&fileinode[currInode],sizeof(inode),1,fp);
-   	  if(fileinode[currInode].used == 0){
-           break;
-   	  }
+	//total of 2 power 18 disk blocks.
+   for(int i=0;i<262144;i++)
+   {
+       string s=to_string(i+1);
+       s+=".txt";
+       InodeChildNames[s]=1;
    }
-   if(currInode == 0){
-   	  printf("FILESYSTEM reaches maximum count i.e., 16 files are present already \n ");
-   	  printf("This New File can't be created \n");
-   	  return;
-   }
-   fseek(fp,currInodeToBytes(currInode),SEEK_SET);
-
-   inode newNode;
-
-   newNode.size = filesize;
-   newNode.used = 1;
-
-   memcpy(&newNode.name,filename,8);
-   
-   int allottedblocks = 0;
-   for(int i=1;i<BLOCKS_COUNT && filesize>0;i++){
-   	  if(availStatus[i]=='0'){
-   	  	availStatus[i] = '1';
-   	  	newNode.blockPointers[allottedblocks] = 1024+((i-1)*1024);
-   	  	allottedblocks++;
-   	  	if(allottedblocks == filesize){
-   	  		break;
-   	  	}
-   	  }
-   }
-   fwrite(&newNode,sizeof(inode),1,fp);
-   fseek(fp,0,SEEK_SET);
-   fwrite(availStatus,sizeof(availStatus),1,fp);
-   fclose(fp);
-   cout<<"file "<<filename<<" is created\n";
 }
 
-void read(char filename[8],int block,char buffer[1024]){
-	FILE *fp = fopen(fsName,"r+");
+//The below function will help to create a file.
+void makeFile(){
 
-	fseek(fp,BLOCKS_COUNT,SEEK_SET);
- 
-	inode currInode;
-    bool fileFound = false;
-	for(int i=0;i<FILES_COUNT;i++){
-		fread(&currInode,sizeof(inode),1,fp);
-		if(strcmp(currInode.name,filename)==0){
-			fileFound = true;
+	struct Inode newInode;
+	struct Inode realInode;
+    
+	string fileName;
+	//cout<<"Maximum file size is 1KB(1024)"<<endl;
+	cin>>fileName;
+	char filecontent[10300];
+	cin.getline(filecontent,sizeof(filecontent));
+	int r=rand();
+	while(InodeId[r]!=0){
+		r=rand();
+	}
+	InodeId[r]=1;
+	newInode.Id=r;
+	if(global->files.find(fileName)!=global->files.end()){
+			cout<<"Already this fileName present so give other fileName Next time."<<endl;
+			cout<<"--------------------------------------"<<endl;
+			InodeId[r]=0;
+			return;
+	}
+	newInode.filename=fileName;
+	string s1;
+	int count=0;
+	int count1=0;
+	if(strlen(filecontent)>1026)
+	{
+		cout<<"File size limit exceeded:- Max File size is 1KB"<<endl;
+		return;
+	}
+	for(int i=2;i<(int)strlen(filecontent)-1;i++){
+		s1+=filecontent[i];
+		if((i-1)%4==0){
+			string r1=(InodeChildNames.begin())->first;
+			stringstream ss;
+			ss<<r1;
+			string childFileName;
+			ss>>childFileName;
+			
+			
+			InodeChildNames.erase(InodeChildNames.begin()->first);
+			newInode.childfilenames.push_back(childFileName);
+			
+			count++;
+
+			if(count==64)
+			{
+				struct Inode temp;
+				string r1=(InodeChildNames.begin())->first;
+				InodeChildNames.erase(InodeChildNames.begin()->first);
+	           if(realInode.indirect.size()<3)
+	           {
+	           	       if(count1==0)
+	           	       {
+	           	       	  realInode=newInode;
+	           	       }
+	           	       else{
+	           	       //newInode=temp;
+	           	       //newInode.childfilenames.clear();
+                       		realInode.indirect.push_back(newInode);
+                       	
+                       }
+                       newInode=temp;
+                       count1++;
+                       
+              
+                       //cout<<r<<"SIZE=  "<<realInode.indirect.size()<<endl;
+	           }
+	           count=0;
+			}
+			//InodeName[fileName]=newInode;
+			fstream file;
+			file.open(childFileName,ios::out);
+			file<<s1;
+			s1="";
+		}
+	}
+	if(s1!=""){
+		string r1=(InodeChildNames.begin())->first;
+		stringstream ss;
+		ss<<r1;
+		string childFileName;
+	 	ss>>childFileName;
+	    InodeChildNames.erase(InodeChildNames.begin()->first);
+		newInode.childfilenames.push_back(childFileName);
+		count++;
+		fstream file;
+		file.open(childFileName,ios::out);
+		file<<s1;
+		s1="";
+	}
+	//Inodes.push_back(newInode);
+	if(count!=0){
+		struct Inode temp;
+		int r=rand();
+		while(InodeId[r]!=0)
+		{
+		    r=rand();
+	    }
+	    InodeId[r]=1;
+	    if(realInode.indirect.size()<3)
+	    {
+	        if(count1==0)
+	        {
+	           	realInode=newInode;
+	        }
+	        else{
+	           	       //newInode=temp;
+	           	       //newInode.childfilenames.clear();
+            realInode.indirect.push_back(newInode);
+                       	
+            }
+            newInode=temp;
+            count1++;
+                       
+              
+            //cout<<r<<"SIZE=  "<<realInode.indirect.size()<<endl;
+		}
+		count=0;
+	}
+	//if(realInode.indirect.size()>0)
+	global->files[fileName]=realInode;
+    
+	
+}
+
+//The below function will delete the required file.
+void deleteFile(){
+	string fileName;
+	cin>>fileName;
+	if(global->files.find(fileName)!=global->files.end()){
+		InodeId[global->files[fileName].Id]=0;
+		for(int i=0;i<(int)global->files[fileName].childfilenames.size();i++){
+			InodeChildNames[global->files[fileName].childfilenames[i]]=0;
+			const char* s1=global->files[fileName].childfilenames[i].c_str();
+			//strcpy(s1,Inodes[k].childfilenames[i]);
+			remove(s1);
+			InodeChildNames[s1]=1;
+		}
+		for(int i=0;i<(int)global->files[fileName].indirect.size();i++){
+			InodeId[global->files[fileName].indirect[i].Id]=0;
+			for(int j=0;j<(int)global->files[fileName].indirect[i].childfilenames.size();j++){
+				InodeChildNames[global->files[fileName].indirect[i].childfilenames[j]]=0;
+				const char* s1=global->files[fileName].indirect[i].childfilenames[j].c_str();
+				//strcpy(s1,Inodes[k].childfilenames[i]);
+				remove(s1);
+				InodeChildNames[s1]=1;
+			}	
+		}
+		global->files.erase(fileName);
+	}
+	else{
+		cout<<"This file not present"<<endl;
+	}
+}
+
+//The below function will rename the given file to given name.
+void renameFile(){
+	string fileName1;
+	cin>>fileName1;
+	string fileName2;
+	cin>>fileName2;
+	if(global->files.find(fileName1)==global->files.end()){
+		cout<<"This "<<fileName1<<" is not present"<<endl;
+		cout<<"----------------------------------------"<<endl;
+		return;
+	}
+	if(global->files.find(fileName2)!=global->files.end()){
+		cout<<"This fileName already exist please give another fileName Next time."<<endl;
+		cout<<"-------------------------------------"<<endl;
+		return;
+	}
+	else{
+		struct Inode tempInode=global->files[fileName1];
+		tempInode.filename=fileName2;
+		global->files[fileName2]=tempInode;
+		global->files.erase(fileName1);
+		cout<<"Changed Sussesfully"<<endl;
+	}
+}
+
+//The below function will print the content of the file.
+void printFile(){
+	string fileName;
+	cin>>fileName;
+	int count=0;
+
+	if(global->files.find(fileName)!=global->files.end()){
+		struct Inode temp=global->files[fileName];
+		struct Inode real=temp;
+		int count1=0;
+		int indirectchilds=real.indirect.size();
+		for(int i=0;i<(int)temp.childfilenames.size();i++){
+			char s1[100];
+			fstream file;
+			file.open(temp.childfilenames[i],ios::in);
+			file.getline(s1,sizeof(s1));
+			cout<<s1;
+			count++;
+			//cout<<count<<endl;
+		}
+		for(int i=0;i<indirectchilds;i++){
+			temp=real.indirect[i];
+			for(int j=0;j<(int)temp.childfilenames.size();j++){
+				char s1[100];
+				fstream file;
+				file.open(temp.childfilenames[j],ios::in);
+				file.getline(s1,sizeof(s1));
+				cout<<s1;
+				count++;
+				//cout<<count<<endl;
+			}
+		}
+		cout<<endl;	
+	}
+	else{
+		cout<<"File Not exist"<<endl;
+	}
+}
+
+//The below function will list all the files present in the current directory.
+void listFiles(){
+	for(auto Inodes:global->files){
+		cout<<"Inode Id:"<<Inodes.second.Id<<" FileName:"<<Inodes.second.filename<<endl;
+	}
+	for(auto directory:global->directories){
+		cout<<"Directory Name:"<<directory.second->name<<endl;
+	}
+}
+
+//The below function will create a directory with given name.
+void makeDirectory(){
+	char directoryName[200];
+	cin>>directoryName;
+	if(global->directories.find(directoryName)==global->directories.end()){
+		int check=mkdir(directoryName,0777);
+		if(check==0){
+			struct Directory* temp=new Directory();
+			temp->name=directoryName;
+			global->directories[directoryName]=temp;
+			cout<<"Directory Created!!!!!!"<<endl;
+			cout<<"----------------------------------------"<<endl;
+		}
+		else{
+			cout<<"Unable to create directory"<<endl;
+			cout<<"------------------------------------------"<<endl;
+		}
+	}
+	else{
+		cout<<"Directory Already Exist"<<endl;
+	}
+}
+
+//The below function will implement cd command.
+void changeDirectory(){
+	char path[100];
+	cin>>path;
+	char back[10]="..";
+	if(strcmp(path,back)==0){
+		if(globalStack.empty()){
+			cout<<"You are at the top most level"<<endl;
+			return;
+		}
+		cout<<"you are going back"<<endl;
+		int t=chdir(path);
+		if(t<0){
+			cout<<"NOT Sussesfull"<<endl;
+		}
+		else{
+			struct Directory* CurrentDirectory=globalStack.top();
+			globalStack.pop();
+			global=CurrentDirectory;
+			cout<<global->directories.size()<<endl;
+			cout<<global->name<<endl;
+		}
+	}
+	else{
+		if(global->directories.find(path)!=global->directories.end()){
+			int t=chdir(path);	
+			if(t<0){
+				cout<<"NOT Sussesfull"<<endl;
+			}
+			else{
+				globalStack.push(global);
+				global=global->directories[path];
+				cout<<global->directories.size()<<endl;
+				cout<<global->name<<endl;
+			}	
+		}
+		else{
+			cout<<"No such Directory exist"<<endl;
+		}
+	}
+	
+}
+
+//The below function will delete the given directory.
+void deleteDirectory(){
+	char directoryName[200];
+	cin>>directoryName;
+	if(global->directories.find(directoryName)!=global->directories.end()){
+		rmdir(directoryName);
+		global->directories.erase(directoryName);
+	}
+	else{
+		cout<<"No such Directory exist"<<endl;
+	}
+
+}
+
+//The below function will append the data at the end of the given file. 
+void appendFile()
+{
+     string fileName;
+     string s1;
+	//cout<<"Maximum file size is 1KB(1024)"<<endl;
+	cin>>fileName;
+	char filecontent[10300];
+	cin.getline(filecontent,sizeof(filecontent));
+	if(global->files.find(fileName)==global->files.end()){
+			cout<<"This file doesn't exists!!"<<endl;
+			cout<<"--------------------------------------"<<endl;
+			return;
+	}
+	struct Inode temp=global->files[fileName];
+	int size1=0;
+	size1+=temp.childfilenames.size()*4;
+	for(int i=0;i<temp.indirect.size();i++)
+	{
+		i+=temp.indirect[i].childfilenames.size()*4;
+	}
+	size1=1024-size1;
+	if(size1<strlen(filecontent))
+	{
+		cout<<"File size is more that expected(Max file size=1KB)"<<endl;
+	}
+	else{
+		//cout<<"sdfsdgdsfgdfsgsdf"<<endl;
+		int count1=temp.indirect.size();
+		//cout<<count1<<endl;
+		struct Inode realInode=temp;
+		struct Inode newInode;
+		if(count1==0){
+			//cout<<"dsfsdfdsfsd***********"<<endl;
+			newInode=realInode;
+		}
+		else{
+			newInode=realInode.indirect[count1-1];
+		}
+		int count=newInode.childfilenames.size();
+		for(int i=2;i<(int)strlen(filecontent)-1;i++){
+			s1+=filecontent[i];
+			if((i-1)%4==0){
+				string r1=(InodeChildNames.begin())->first;
+				stringstream ss;
+				ss<<r1;
+				string childFileName;
+				ss>>childFileName;
+				
+				
+				InodeChildNames.erase(InodeChildNames.begin()->first);
+				newInode.childfilenames.push_back(childFileName);
+				
+				count++;
+
+				if(count==64)
+				{
+					struct Inode temp1;
+					string r1=(InodeChildNames.begin())->first;
+					InodeChildNames.erase(InodeChildNames.begin()->first);
+		           if(realInode.indirect.size()<3)
+		           {
+		           	       if(count1==0)
+		           	       {
+		           	       	  realInode=newInode;
+		           	       }
+		           	       else{
+		           	       		realInode.indirect.push_back(newInode);	
+	                       }
+	                       newInode=temp1;
+	                       count1++;
+		           }
+		           count=0;
+				}
+				fstream file;
+				file.open(childFileName,ios::out);
+				file<<s1;
+				s1="";
+			}
+		}
+		if(s1!=""){
+			string r1=(InodeChildNames.begin())->first;
+			stringstream ss;
+			ss<<r1;
+			string childFileName;
+		 	ss>>childFileName;
+		    InodeChildNames.erase(InodeChildNames.begin()->first);
+			newInode.childfilenames.push_back(childFileName);
+			count++;
+			fstream file;
+			file.open(childFileName,ios::out);
+			file<<s1;
+			s1="";
+		}
+		//Inodes.push_back(newInode);
+		if(count!=0){
+			struct Inode temp1;
+			string r1=(InodeChildNames.begin())->first;
+			InodeChildNames.erase(InodeChildNames.begin()->first);
+		    if(realInode.indirect.size()<3)
+		    {
+		        if(count1==0)
+		        {
+		           	realInode=newInode;
+		        }
+		        else{
+	            	realInode.indirect.push_back(newInode);       	
+	            }
+	            newInode=temp1;
+	            count1++;
+			}
+			count=0;
+		}
+		global->files[fileName]=realInode;
+
+	}
+}
+
+//The below function will act as a helper function to print the contents of a file.
+void printFile(fstream &file1,struct Inode t,bool f){
+	if(!f)
+		file1<<t.filename<<endl;
+	file1<<t.Id<<endl;
+	file1<<t.childfilenames.size()<<endl;
+	for(int i=0;i<t.childfilenames.size();i++){
+		file1<<t.childfilenames[i]<<endl;
+	}
+	file1<<t.indirect.size()<<endl;
+	for(int i=0;i<t.indirect.size();i++){
+		printFile(file1,t.indirect[i],1);
+	}
+}
+
+//The below function will store the meta data of the files when the programe is terminated.
+void helperStoreData(struct Directory* t)
+{
+	fstream file1;	
+	file1.open("restore.txt",ios::out);
+	file1<<t->files.size()<<endl;
+	for(auto it:t->files){
+		printFile(file1,it.second,0);		
+	}
+	file1<<t->directories.size()<<endl;
+	for(auto it:t->directories){
+		file1<<it.first<<endl;
+
+	}
+    file1.close();
+}
+
+//The below function will store the meta data.
+ void storeData(struct Directory* t)
+ {
+         helperStoreData(t);
+         //cout<<t->name<<" oops "<<endl;
+          for(auto it:t->directories)
+         {
+    		
+         	while(chdir(it.first.c_str())!=0);
+         	globalStack.push(t);
+         	t=it.second;
+         	storeData(t);
+         	while(chdir("..")!=0);
+         	t=globalStack.top();
+         	globalStack.pop();
+         }
+ }
+
+
+//The below function will store the data of the inodes.
+void readInode(fstream &file1,struct Inode &temp,bool f){
+	if(!f){
+		string fileName;
+		file1>>fileName;
+		temp.filename=fileName;
+	}
+	int Id;
+	file1>>Id;
+	temp.Id=Id;
+	int noOfChildFiles;
+	file1>>noOfChildFiles;
+	for(int i=0;i<noOfChildFiles;i++){
+		string t;
+		file1>>t;
+		temp.childfilenames.push_back(t);
+	}
+	int noOfIndirectInodes;
+	file1>>noOfIndirectInodes;
+	for(int i=0;i<noOfIndirectInodes;i++){
+		struct Inode t;
+		readInode(file1,t,1);
+		temp.indirect.push_back(t);
+	}
+}
+
+//The below function will load the meta data of the files at the begining of the programe. 
+void LoadData(){
+	fstream file1;
+	file1.open("restore.txt",ios::in);
+	int numberOfFiles;
+	file1>>numberOfFiles;
+	for(int i=0;i<numberOfFiles;i++){
+		struct Inode temp;
+		readInode(file1,temp,0);
+		global->files[temp.filename]=temp;
+	}
+	int numberOfDirectories;
+	file1>>numberOfDirectories;
+	for(int i=0;i<numberOfDirectories;i++){
+		struct Directory *temp=new Directory();
+		string t;
+		file1>>t;
+		temp->name=t;
+		while(chdir(t.c_str())!=0);
+        globalStack.push(global);
+        global=temp;
+        LoadData();
+        while(chdir("..")!=0);
+        global=globalStack.top();
+        globalStack.pop();
+        global->directories[t]=temp;
+
+	}
+}
+
+//The below function will act as entry point of the programe.
+int main(){
+	initialiseDiskBlockPointers();
+	chdir("global");
+	global=new Directory();
+	global->name="global";
+	LoadData();
+	while(1){
+		string s;
+		cout<<"Commands Available:"<<endl;
+		cout<<"mkdir foldername"<<endl;
+		cout<<"cd foldername"<<endl;
+		cout<<"del foldername"<<endl;
+		cout<<"mf fileName \"file content\" ->create file"<<endl;
+		cout<<"df fileName ->delete file"<<endl;
+		cout<<"rf fileName1 fileName2 ->rename file"<<endl;
+		cout<<"pf fileName ->display contents of file"<<endl;
+		cout<<"ap fileName->to append content at the end of file"<<endl;
+		cout<<"ls ->dispaly inode number and filename"<<endl;
+		cout<<"exit->to come out of program"<<endl;
+		cin>>s;
+
+		if(s[0]=='m' && s[1]=='k'){
+			makeDirectory();
+		}
+		else if(s[0]=='c' && s[1]=='d'){
+			changeDirectory();
+		}
+		else if(s[0]=='d' && s[1]=='e'){
+			deleteDirectory();
+		}
+		//MakeFile
+		else if(s[0]=='m' && s[1]=='f'){
+			makeFile();
+		}
+
+		//Delete File
+		else if(s[0]=='d' && s[1]=='f'){
+			deleteFile();
+		}
+
+		//Rename File
+		else if(s[0]=='r'&&s[1]=='f'){
+			renameFile();
+		}
+		//Print File
+		else if(s[0]=='p' && s[1]=='f'){
+			printFile();
+		}
+		//To list all files in directory
+		else if(s[0]=='l' && s[1]=='s'){
+			listFiles();
+		}
+		else if(s[0]=='a' and s[1]=='p')
+		{
+			appendFile();
+		}
+		//To exit from the program
+		else if(s=="exit"){
+          	while(!globalStack.empty())
+         	{
+         		global=globalStack.top();
+         		globalStack.pop();
+         		while(chdir("..")!=0);
+         	}
+			storeData(global);
 			break;
 		}
+		cout<<"---------------------------------"<<endl;
 	}
-	if(!fileFound){
-		cout<<endl<<filename<<" doesn't exist in the FILESYSTEM, so can't able to perform read operation\n\n";
-		fclose(fp);
-		return;
-	}
-	if(currInode.size<block){
-		cout<<"\nsorry, can't able to perform read operation, entered block num = "<<block<<" but current file size = "<<currInode.size<<endl;
-        fclose(fp);
-		return;
-	}
-	fseek(fp,currInode.blockPointers[block-1],SEEK_SET);
-	fread(buffer,1024,1,fp);
-	cout<<"\nReading operation from "<<filename<<" ,block num = "<<block<<" is done, so content of the buffer = \n";
-	printf("\n\t%s\n\n",buffer);
-	fclose(fp);
-}
-
-void write(char filename[8],int block,char buffer[1024]){
-
-   FILE *fp = fopen(fsName,"r+");
-   int seekpoint = fseek(fp,BLOCKS_COUNT,SEEK_SET);
-
-   inode currInode;
-   bool fileFound = false;
-   for(int i=0;i<FILES_COUNT;i++){
-   	  fread(&currInode,sizeof(inode),1,fp);
-   	  if(strcmp(currInode.name,filename)==0){
-   	  	 fileFound = true;
-   	  	 break;
-   	  }
-   }
-   if(!fileFound){
-   	  cout<<endl<<filename<<" doesn't exist in the FILESYSTEM, so can't able to perform write operation \n\n";
-      fclose(fp);
-      return;
-   }
-   if(block<=0){
-		cout<<"\nplease enter valid block number, greater than zero\n";
-	}
-   if(currInode.size<block){
-   	    cout<<"\nsorry, can't able to perform write operation, entered block num = "<<block<<" but current file size = "<<currInode.size<<endl;
-        fclose(fp);
-		return;
-   }
-   cout<<"\nbuffer content "<<buffer <<" : is written into block number "<<block<<endl;
-   fseek(fp,currInode.blockPointers[block-1],SEEK_SET);
-   fwrite(buffer,1024,1,fp);
-   fclose(fp);
-}
-
-void deleteF(char filename[8]){
-	char availStatus[128];
-	FILE *fp = fopen(fsName,"r+");
-	fread(availStatus,BLOCKS_COUNT,1,fp);
-    int seekpoint;
-    inode currNode,newNode;
-	bool fileFound = false;
-	for(int i=1;i<=FILES_COUNT;i++){
-        fread(&currNode,sizeof(inode),1,fp);
-        if(strcmp(currNode.name,filename)==0){
-        	fileFound = true;
-        	seekpoint = currInodeToBytes(i);
-        	break;
-        }
-	}
-	if(!fileFound){
-		cout<<endl<<filename<<" is not present in the FILESYSTEM, can't be deleted\n\n";
-		fclose(fp);
-		return;
-	}
-    for(int i=0;i<currNode.size;i++){
-    	char *buffer;
-    	buffer = (char *)calloc(1024,sizeof(char));
-    	fseek(fp,currNode.blockPointers[i],SEEK_SET);
-    	fwrite(buffer,1024,1,fp);
-    	int blocknum = (currNode.blockPointers[i])/1024;
-    	availStatus[blocknum] = '0';
-    }
-    newNode.used = 0;
-    fseek(fp,seekpoint,SEEK_SET);
-    fwrite(&newNode,sizeof(inode),1,fp);
-
-    fseek(fp,0,SEEK_SET);
-    fwrite(availStatus,128,1,fp);
-    fclose(fp);
-    printf("\n\n File , %s is deleted\n\n",filename);
-    return;
-}
-
-void ls(){
-   
-  FILE* fp = fopen(fsName,"r+");
-  char availStatus[128];
-  fread(availStatus,128,1,fp); // first 128 BYTES is assigned for checking block's status
-
-  inode curr;
-  int files_total = 0;
-  cout<<"\n\nCurrent status of FILESYSTEM is as follows :- \n\n";
-  for(int i=0;i<FILES_COUNT;i++){
-  	fread(&curr,sizeof(inode),1,fp);
-  	if(curr.used == 1){
-      files_total++;
-  		cout<<"\nName of the FILE = "<<curr.name;
-  		cout<<",\tSize of the FILE = "<<curr.size<<endl;
-  		cout<<endl;
-  	}
-  }
-   
-  fclose(fp);
-}
-
-bool checkFileAlreadyExists(char filename[8]){
-   bool flag = false;
-   FILE* fp = fopen(fsName,"r+");
-   char availStatus[128];
-   fread(availStatus,128,1,fp); // first 128 BYTES is assigned for checking block's status
-
-   inode curr;
-   for(int i=0;i<FILES_COUNT;i++){
-  	fread(&curr,sizeof(inode),1,fp);
-  	if(curr.used == 1){
-  		if(strcmp(curr.name,filename)==0){
-  			flag = true;
-  		}
-  	}
-   } 
-   
-  fclose(fp);
-  return flag;
-
-}
-
-int findTotalAllotedBlocks(){
-   int count = 0;
-   FILE* fp = fopen(fsName,"r+");
-   char availStatus[128];
-   fread(availStatus,128,1,fp); // first 128 BYTES is assigned for checking block's status
-
-   inode curr;
-   for(int i=0;i<FILES_COUNT;i++){
-  	fread(&curr,sizeof(inode),1,fp);
-  	if(curr.used == 1){
-  		count += curr.size;
-  	}
-   } 
-   
-  fclose(fp);
-  return count;
-}
-
-int main(){
-
-	cout<<"Choose among following :-\n 1) create a new FILESYSTEM or\n 2) continue with a already existed one\n";
-	cout<<"\nyour choice = ";
-	int choice;
-	cin >> choice;
-    FILE *fp;
-	if(choice == 1){
-
-		char *buffer;
-
-        cout<<"\n Enter the desired name for FILESYSTEM = ";
-		cin >> fsName;
-
-        fp = fopen(fsName,"w");
-
-        buffer = (char *)calloc(1024,sizeof(char));
-        
-        for(int i=1;i<128;i++){
-        	buffer[i] = '0';
-        }
-        // as first datablock is superblock and first 128 Blocks are for block's status whether they are availabe or not except superblock
-        buffer[0] = '1';
-
-        fwrite(buffer,1024,1,fp);
-        buffer = (char *)calloc(1024,sizeof(char));
-        buffer[0] = '0';
-        for(int i=1;i<BLOCKS_COUNT;i++){
-            fwrite(buffer,1024,1,fp);
-        }
-        cout<<"FILE SYSTEM is created with name = "<<fsName<<endl;
-        fclose(fp);
-
-	}
-	if(choice == 2){
-		cout<<"\nEnter the FILESYSTEM name which already exists = ";
-		cin >> fsName;
-		fp = fopen(fsName,"r");
-		if(!fp){
-            cout<<"\nEntered FILESYSTEM isn't existed, please create a new one\n";
-            exit(0);
-		}
-		fclose(fp);
-	}
-
-	char read_or_write_buffer[1024]="HELLO\0";
-	char filename[8];
-	int sizeofFN,blockNUM;
-    bool flag = true;
-    int curr_files_count=0,totalAllotedBlocks=0;
-    while(flag){
-    	printf("\nplease choose the following options : - \n");
-    	int option;
-    	cout << "1) CREATE,  2) DELETE,  3) READ,  4) WRITE,  5) LISTOUTFILES, 6) exit \n";
-    	cout << "\nchoose option = ";
-    	cin >> option;
-    	cout<<endl;
-    	switch(option){
-            
-            case 1 : cout<<"\nenter the file name to create = ";
-                     cin >> filename;
-                     cout<<"\nenter the size of this file = ";
-                     cin >> sizeofFN;
-                     if(sizeofFN > 8){
-                     	cout<<"\nmaximum file size allowed is 8, please try again with smaller size\n";
-                     	break;
-                     }
-                     curr_files_count = checkNumberOfFiles();
-                     if(curr_files_count>=16){
-   	                    cout<<"\nSorry maximum Limit of Files(16) already existed in this FILESYSTEM, can't able to create new one\n";
-   	                    break;
-                     }
-                     totalAllotedBlocks = findTotalAllotedBlocks();
-                     if(totalAllotedBlocks==120 && curr_files_count==15 && sizeofFN==8){
-                     	cout<<"\nAs already 15 files are of maximum capacity i.e.,120 blocks already filled, hence only 7 blocks are availabe for new file\n";
-                     	cout<<"\nplease try again with filesize less than 8\n\n";
-                     	break;
-                     }
-                     if(!checkFileAlreadyExists(filename)){
-                        create(filename,sizeofFN);
-                     }
-                     else{
-                     	cout<<"\nEntered FileName already exists in the FILESYSTEM, please try with some other name\n";
-                     }
-                     break;
-            case 2 : cout<<"\nenter the file name to delete = ";
-                     cin >> filename;
-                     deleteF(filename);
-                     break;
-            case 3 : cout<<"\nenter the file name to read from = ";
-                     cin >> filename;
-                     cout<<"\nenter the block number from where you want to read = ";
-                     cin >> blockNUM;
-                     read(filename,blockNUM,read_or_write_buffer);
-                     break;
-
-            case 4 : cout<<"\nenter the file name to write into = ";
-                     cin >> filename;
-                     cout<<"\nenter the block number to where you want to write = ";
-                     cin >> blockNUM;
-                     cin.ignore();
-                     cout<<"\nenter the content you want to write = ";
-                     cin.getline(read_or_write_buffer,1024);
-                     write(filename,blockNUM,read_or_write_buffer);
-                     break;         
-
-            case 5 : ls(); 
-                     break;
-
-            case 6 : flag = false;
-                     break;
-            default :
-                     cout<<"\nplease enter correct option\n";
-                     break;                          
-
-    	}
-    }
 	return 0;
 }
