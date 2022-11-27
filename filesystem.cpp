@@ -30,7 +30,7 @@ struct Directory{
 
 struct Directory *global;     // global directory
 stack<struct Directory*> globalStack;   // stack to keep track of the directories we are inside of
-unordered_map<int,int> InodeId;  //checks if InodeId is unique or not
+unordered_map<int,int> InodeId;  //checks if InodeId is unique or not  ?
 unordered_map<string,int> InodeChildNames; //checks if InodeChildNames is unique or not
 
 
@@ -40,10 +40,10 @@ unordered_map<string,int> InodeChildNames; //checks if InodeChildNames is unique
 void initialiseDiskBlockPointers()
 {
 	//total of 2 power 18 disk blocks.
-   for(int i = 0; i<262144; i++)
+   for(int i = 0; i < 262144; i++)  ? 256*4 kb
    {
-       string s=to_string(i+1);
-       s+=".txt";
+       string s = to_string(i+1);
+       s += ".txt";
        InodeChildNames[s]=1;
    }
 }
@@ -57,30 +57,30 @@ void makeFile(){
 	string fileName;
 	//cout<<"Maximum file size is 1KB(1024)"<<endl;
 	cin>>fileName;
-	char filecontent[10300];
+	char filecontent[1030];  
 	cin.getline(filecontent,sizeof(filecontent));
-	int r=rand();
-	while(InodeId[r]!=0){
-		r=rand();
+	int r = rand();  ? // r is a random number which will be assigned as id to a file block
+	while(InodeId[r]!=0){   
+		r = rand();
 	}
-	InodeId[r]=1;
-	newInode.Id=r;
-	if(global->files.find(fileName)!= global->files.end()){
+	InodeId[r] = 1;
+	newInode.Id = r;
+	if(global->files.find(fileName)!= global->files.end()){  // if file already exists
 			cout<<"Error : Filename already exists"<<endl;
-			cout<<"--------------------------------------"<<endl;
 			InodeId[r]=0;
 			return;
 	}
-	newInode.filename=fileName;
+	newInode.filename = fileName;
 	string s1;
 	int count=0;
 	int count1=0;
-	if(strlen(filecontent)>1026)
+	if(strlen(filecontent)>1024)
 	{
 		cout<<"File size limit exceeded:- Max File size is 1KB"<<endl;
 		return;
 	}
-	for(int i=2;i<(int)strlen(filecontent)-1;i++){
+	for(int i=0;i<(int)strlen(filecontent)-1;i++)     
+	{
 		s1+=filecontent[i];
 		if((i-1)%4==0){
 			string r1=(InodeChildNames.begin())->first;
@@ -102,14 +102,9 @@ void makeFile(){
 				InodeChildNames.erase(InodeChildNames.begin()->first);
 	            if(realInode.indirect.size()<3)
 	            {
-	           	       if(count1==0)
-	           	       {
-	           	       	  realInode=newInode;
-	           	       }
-	           	       else{
-	           	       		realInode.indirect.push_back(newInode);	
-                       }
-                       newInode=temp;
+	           	       if(count1 == 0) realInode = newInode;	           	       
+	           	       else realInode.indirect.push_back(newInode);	                       
+                       newInode = temp;
                        count1++;
 	           }
 	           count=0;
@@ -132,7 +127,8 @@ void makeFile(){
 		file<<s1;
 		s1="";
 	}
-	if(count!=0){
+	if(count!=0)   
+	{
 		struct Inode temp;
 		int r=rand();
 		while(InodeId[r]!=0)
@@ -167,7 +163,7 @@ void deleteFile(){
 		for(int i=0;i<(int)global->files[fileName].childfilenames.size();i++){
 			InodeChildNames[global->files[fileName].childfilenames[i]]=0;
 			string s2=global->files[fileName].childfilenames[i];
-			const char* s1=global->files[fileName].childfilenames[i].c_str();
+			const char* s1= s2.c_str();
 			//This is to physically delete the file
 			remove(s1);
 			InodeChildNames[s2]=1;
@@ -186,7 +182,7 @@ void deleteFile(){
 		global->files.erase(fileName);
 	}
 	else{
-		cout<<"This file not present"<<endl;
+		cout<<"Given file does not exist"<<endl;
 	}
 }
 
@@ -202,7 +198,7 @@ void renameFile(){
 		return;
 	}
 	if(global->files.find(fileName2)!=global->files.end()){
-		cout<<"This fileName already exist please give another fileName Next time."<<endl;
+		cout<<"This fileName already exists, please give another name."<<endl;
 		cout<<"-------------------------------------"<<endl;
 		return;
 	}
@@ -211,7 +207,7 @@ void renameFile(){
 		tempInode.filename=fileName2;
 		global->files[fileName2]=tempInode;
 		global->files.erase(fileName1);
-		cout<<"Changed Sussesfully"<<endl;
+		cout<<"File renamed succesfully"<<endl;
 	}
 }
 
@@ -219,7 +215,6 @@ void renameFile(){
 void printFile(){
 	string fileName;
 	cin>>fileName;
-	int count=0;
 
 	if(global->files.find(fileName)!=global->files.end()){
 		struct Inode temp=global->files[fileName];
@@ -232,7 +227,6 @@ void printFile(){
 			file.open(temp.childfilenames[i],ios::in);
 			file.getline(s1,sizeof(s1));
 			cout<<s1;
-			count++;
 		}
 		for(int i=0;i<indirectchilds;i++){
 			temp=real.indirect[i];
@@ -242,13 +236,12 @@ void printFile(){
 				file.open(temp.childfilenames[j],ios::in);
 				file.getline(s1,sizeof(s1));
 				cout<<s1;
-				count++;
 			}
 		}
 		cout<<endl;	
 	}
 	else{
-		cout<<"File Not exist"<<endl;
+		cout<<"File does not exist"<<endl;
 	}
 }
 
@@ -296,10 +289,9 @@ void changeDirectory(){
 			return;
 		}
 		cout<<"you are going back"<<endl;
-		int t=chdir(path);
-		if(t<0){
-			cout<<"NOT Sussesfull"<<endl;
-		}
+		int t = chdir(path);
+		if(t<0) cout<<"Not succesful"<<endl;
+		
 		else{
 			struct Directory* CurrentDirectory=globalStack.top();
 			globalStack.pop();
@@ -312,7 +304,7 @@ void changeDirectory(){
 		if(global->directories.find(path)!=global->directories.end()){
 			int t=chdir(path);	
 			if(t<0){
-				cout<<"NOT Sussesfull"<<endl;
+				cout<<"Not succesful"<<endl;
 			}
 			else{
 				globalStack.push(global);
@@ -322,7 +314,7 @@ void changeDirectory(){
 			}	
 		}
 		else{
-			cout<<"No such Directory exist"<<endl;
+			cout<<"No such directory exists"<<endl;
 		}
 	}
 	
@@ -352,13 +344,13 @@ void appendFile()
 	char filecontent[10300];
 	cin.getline(filecontent,sizeof(filecontent));
 	if(global->files.find(fileName)==global->files.end()){
-			cout<<"This file doesn't exists!!"<<endl;
+			cout<<"This file doesn't exist!!"<<endl;
 			cout<<"--------------------------------------"<<endl;
 			return;
 	}
 	struct Inode temp=global->files[fileName];
 	int size1=0;
-	size1+=temp.childfilenames.size()*4;
+	size1+=temp.childfilenames.size()*4; 
 	for(int i=0;i<temp.indirect.size();i++)
 	{
 		i+=temp.indirect[i].childfilenames.size()*4;
@@ -369,9 +361,7 @@ void appendFile()
 		cout<<"File size is more that expected(Max file size=1KB)"<<endl;
 	}
 	else{
-		//cout<<"sdfsdgdsfgdfsgsdf"<<endl;
 		int count1=temp.indirect.size();
-		//cout<<count1<<endl;
 		struct Inode realInode=temp;
 		struct Inode newInode;
 		if(count1==0){
@@ -422,7 +412,8 @@ void appendFile()
 				s1="";
 			}
 		}
-		if(s1!=""){
+		if(s1!="")
+		{
 			string r1=(InodeChildNames.begin())->first;
 			string childFileName=r1;
 		    InodeChildNames.erase(InodeChildNames.begin()->first);
@@ -433,8 +424,8 @@ void appendFile()
 			file<<s1;
 			s1="";
 		}
-		//Inodes.push_back(newInode);
-		if(count!=0){
+		if(count!=0)
+		{
 			struct Inode temp1;
 			int r=rand();
 			while(InodeId[r]!=0){
@@ -446,13 +437,8 @@ void appendFile()
 			InodeChildNames.erase(InodeChildNames.begin()->first);
 		    if(realInode.indirect.size()<3)
 		    {
-		        if(count1==0)
-		        {
-		           	realInode=newInode;
-		        }
-		        else{
-	            	realInode.indirect.push_back(newInode);       	
-	            }
+		        if(count1==0) realInode=newInode;
+		        else realInode.indirect.push_back(newInode);       	
 	            newInode=temp1;
 	            count1++;
 			}
@@ -463,8 +449,9 @@ void appendFile()
 	}
 }
 
-//The below function will act as a helper function to print the contents of a file.
-void printFile(fstream &file1,struct Inode t,bool f){
+//Helper function to print the contents of a file.    
+void printFile(fstream &file1,struct Inode t,bool f)   
+{
 	if(!f)
 		file1<<t.filename<<endl;
 	file1<<t.Id<<endl;
@@ -478,7 +465,7 @@ void printFile(fstream &file1,struct Inode t,bool f){
 	}
 }
 
-//The below function will store the meta data of the files when the programe is terminated.
+//Helper function to store the meta data
 void helperStoreData(struct Directory* t)
 {
 	fstream file1;	
@@ -496,7 +483,7 @@ void helperStoreData(struct Directory* t)
 }
 
 //The below function will store the meta data.
- void storeData(struct Directory* t)
+ void storeData(struct Directory* t)    example format? 
  {
          helperStoreData(t);
          //cout<<t->name<<" oops "<<endl;
@@ -507,7 +494,7 @@ void helperStoreData(struct Directory* t)
          	globalStack.push(t);
          	t=it.second;
          	storeData(t);
-         	while(chdir("..")!=0);
+         	while(chdir("..")!=0);  
          	t=globalStack.top();
          	globalStack.pop();
          }
@@ -518,7 +505,7 @@ void helperStoreData(struct Directory* t)
 void readInode(fstream &file1,struct Inode &temp,bool f){
 	if(!f){
 		string fileName;
-		file1>>fileName;
+		file1>>fileName; 
 		temp.filename=fileName;
 	}
 	int Id;
@@ -530,7 +517,7 @@ void readInode(fstream &file1,struct Inode &temp,bool f){
 	for(int i=0;i<noOfChildFiles;i++){
 		string t;
 		file1>>t;
-		InodeChildNames.erase(t);
+		InodeChildNames.erase(t); ?
 		temp.childfilenames.push_back(t);
 	}
 	int noOfIndirectInodes;
@@ -542,7 +529,7 @@ void readInode(fstream &file1,struct Inode &temp,bool f){
 	}
 }
 
-//The below function will load the meta data of the files at the begining of the programe. 
+//The below function will load the meta data of the files at the begining of the programme. 
 void LoadData(){
 	fstream file1;
 	file1.open("restore.txt",ios::in);
@@ -563,7 +550,7 @@ void LoadData(){
 		while(chdir(t.c_str())!=0);
         globalStack.push(global);
         global=temp;
-        LoadData();
+        LoadData(); 
         while(chdir("..")!=0);
         global=globalStack.top();
         globalStack.pop();
