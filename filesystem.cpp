@@ -449,21 +449,6 @@ void appendFile()
 	}
 }
 
-//Helper function to print the contents of a file.    
-void printFile(fstream &file1,struct Inode t,bool f)   
-{
-	if(!f)
-		file1<<t.filename<<endl;
-	file1<<t.Id<<endl;
-	file1<<t.childfilenames.size()<<endl;
-	for(int i=0;i<t.childfilenames.size();i++){
-		file1<<t.childfilenames[i]<<endl;
-	}
-	file1<<t.indirect.size()<<endl;
-	for(int i=0;i<t.indirect.size();i++){
-		printFile(file1,t.indirect[i],1);
-	}
-}
 
 //Helper function to store the meta data
 void helperStoreData(struct Directory* t)
