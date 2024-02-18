@@ -82,7 +82,7 @@ void makeFile(){
 	for(int i=0;i<(int)strlen(filecontent)-1;i++)     
 	{
 		s1+=filecontent[i];
-		if((i-1)%4==0){
+		if((i-1)%4==0) {
 			string r1=(InodeChildNames.begin())->first;
 			string childFileName=r1;
 			InodeChildNames.erase(InodeChildNames.begin()->first);
@@ -100,14 +100,14 @@ void makeFile(){
 				string r1=(InodeChildNames.begin())->first;
 				childFileName=r1;
 				InodeChildNames.erase(InodeChildNames.begin()->first);
-	            if(realInode.indirect.size()<3)
-	            {
-	           	       if(count1 == 0) realInode = newInode;	           	       
-	           	       else realInode.indirect.push_back(newInode);	                       
-                       newInode = temp;
-                       count1++;
-	           }
-	           count=0;
+			        if(realInode.indirect.size()<3)
+			        {
+				    if(count1 == 0) realInode = newInode;	           	       
+			            else realInode.indirect.push_back(newInode);	                       
+			            newInode = temp;
+			            count1++;
+			        }
+	           		count=0;
 			}
 			fstream file;
 			file.open(childFileName,ios::out);
@@ -134,7 +134,7 @@ void makeFile(){
 		while(InodeId[r]!=0)
 		{
 		    r=rand();
-	    }
+	   	 }
 	    InodeId[r]=1;
 	    temp.Id=r;
 	    if(realInode.indirect.size()<3)
@@ -145,10 +145,10 @@ void makeFile(){
 	        }
 	        else{
 	           realInode.indirect.push_back(newInode);               	
-            }
-            newInode=temp;
-            count1++;
-		}
+            	}
+            	newInode=temp;
+            	count1++;
+	   }
 		count=0;
 	}
 	global->files[fileName]=realInode;
