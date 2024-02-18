@@ -40,7 +40,7 @@ unordered_map<string,int> InodeChildNames; //checks if InodeChildNames is unique
 void initialiseDiskBlockPointers()
 {
 	//total of 2 power 18 disk blocks.
-   for(int i = 0; i < 262144; i++)  ? 256*4 kb
+   for(int i = 0; i < 262144; i++)  // 256*8 kb
    {
        string s = to_string(i+1);
        s += ".txt";
